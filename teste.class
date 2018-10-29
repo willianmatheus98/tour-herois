@@ -1,29 +1,57 @@
 public class CRA_CaseUtil {
 
-    public static void ProcessCases(List<Case> newCasesList, Map<Id, Case> oldCasesMap){
-        List<Case> casesApprovalList = new List<Case>();
-        Map<Id, Case> casesTransitionMap = new Map<Id, Case>();
-        Set<Id> transitionAssuntosId = new Set<Id>();
+    public static void ProcessCases(List < Case > newCasesList, Map < Id, Case > oldCasesMap) {
+        List < Case > casesApprovalList = new List < Case > ();
+        Map < Id, Case > casesTransitionMap = new Map < Id, Case > ();
+        Set < Id > transitionAssuntosId = new Set < Id > ();
         //Set<Id> closeCaseIds = new Set<Id>();
-        Set<Id> approvalCasesIds = new Set<Id>();
-        Set<Id> completeMilestoneCases = new Set<Id>();
-        List<Case> newCasesAttList = new List<Case>();
-        Map<Id, Case> approvalStatements = new Map<Id, Case>();
-        Map<Id, Case> errorCasesMap = new Map<Id, Case>();                
-        for(Case caso: newCasesList){
-            if(caso.Status == 'Em andamento' && (oldCasesMap.get(caso.Id).Status == 'Novo' || oldCasesMap.get(caso.Id).Status == 'Aguardando aluno')){
+        Set < Id > approvalCasesIds = new Set < Id > ();
+        Set < Id > completeMilestoneCases = new Set < Id > ();
+        List < Case > newCasesAttList = new List < Case > ();
+        Map < Id, Case > approvalStatements = new Map < Id, Case > ();
+        Map < Id, Case > errorCasesMap = new Map < Id, Case > ();
+        Map < Id, Case > errorCasesCancMap = new Map < Id, Case > ();
+        for (Case caso: newCasesList) {
+
+            //Ajuste - Willian Matheus (wbatista@moldsoft.com.br) Inicio - 06/04/2018
+            if (caso.Tipo_de_Registro__c == 'Cancelamento de Contrato' && oldCasesMap.get(caso.Id).Status == 'Finalizado por Decurso de Prazo') {
+                errorCasesCancMap.put(caso.Id, caso);
+                errorCasesCancMap.get(caso.Id).addError('Essa solicitação não pode ser editada pois foi Finalizada por Decurso de Prazo.');
+            }
+
+            if (caso.Tipo_de_Registro__c == 'Cancelamento de Contrato' && oldCasesMap.get(caso.Id).Status == 'Erro' && oldCasesMap.get(caso.Id).Varios_Id_Habilitacao__c == true) {
+                errorCasesCancMap.put(caso.Id, caso);
+                errorCasesCancMap.get(caso.Id).addError('Problemas no cadastro. Favor procurar o NAAF. (Obs: Mais de 1 id Habilitação Filial encontrado ou nenhum encontrado.)');
+            }
+
+            if (caso.Tipo_de_Registro__c == 'Cancelamento de Contrato' && oldCasesMap.get(caso.Id).Status == 'Erro' && oldCasesMap.get(caso.Id).Erro_nas_Procedures__c == true) {
+                errorCasesCancMap.put(caso.Id, caso);
+                errorCasesCancMap.get(caso.Id).addError('Problemas no cadastro. Favor procurar o NAAF. (Obs:Erro nas Procedures do RM)');
+            }
+            //Ajuste - Willian Matheus (wbatista@moldsoft.com.br) Fim - 06/04/2018
+
+
+            if (caso.Status == 'Em andamento' && (oldCasesMap.get(caso.Id).Status == 'Novo' || oldCasesMap.get(caso.Id).Status == 'Aguardando aluno')) {
                 Date today = System.Today();
                 casesTransitionMap.put(caso.Id, caso);
-                if(!caso.Apex_context__c && caso.Anexo_obrigatorio__c){
+                if (!caso.Apex_context__c && caso.Anexo_obrigatorio__c) {
                     newCasesAttList.add(caso);
                 }
-                caso.Contador_de_Marcos__c = 1;                
-                if((!caso.Pagamento_depois_aprovacao__c || caso.Valor__c == 0) && caso.Tem_aprovacao__c)
+                caso.Contador_de_Marcos__c = 1;
+
+                //Ajuste - Willian Matheus (wbatista@moldsoft.com.br) Inicio - 06/04/2018
+                if (caso.Tipo_de_Registro__c == 'Cancelamento de Contrato') {
+
+                    //Envia para Aprovação
+                    sendToApprovalWithCancelamento(caso.Id);
+
+                }
+                //Ajuste - Willian Matheus (wbatista@moldsoft.com.br) Fim - 06/04/2018
+
+                if ((!caso.Pagamento_depois_aprovacao__c || caso.Valor__c == 0) && caso.Tem_aprovacao__c)
                     casesApprovalList.add(caso);
                 transitionAssuntosId.add(caso.Assunto__c);
-            }
-            
-            else if(caso.Status == 'Em andamento' && oldCasesMap.get(caso.Id).Status == 'Aguardando pagamento'){
+            } else if (caso.Status == 'Em andamento' && oldCasesMap.get(caso.Id).Status == 'Aguardando pagamento') {
                 //completeMilestoneCases.add(caso.Id);
                 /*
                 if(String.isBlank(caso.Status_de_Aprovacao__c) && caso.Pagamento_depois_aprovacao__c && caso.Tem_aprovacao__c){
@@ -34,75 +62,72 @@ public class CRA_CaseUtil {
                 //else if(caso.Conclusao_apos_pagamento__c)
                     //closeCaseIds.add(caso.Id);
                 */
-            }
-            else if(caso.Enviar_para_aprovacao__c && !oldCasesMap.get(caso.Id).Enviar_para_aprovacao__c){
-                if(String.isBlank(caso.Status_de_Aprovacao__c) && caso.Pagamento_depois_aprovacao__c && caso.Tem_aprovacao__c){
+            } else if (caso.Enviar_para_aprovacao__c && !oldCasesMap.get(caso.Id).Enviar_para_aprovacao__c) {
+                if (String.isBlank(caso.Status_de_Aprovacao__c) && caso.Pagamento_depois_aprovacao__c && caso.Tem_aprovacao__c) {
                     casesApprovalList.add(caso);
                     transitionAssuntosId.add(caso.Assunto__c);
                 }
-            }
-            else if(caso.Marco_aprovacao_pendente__c && !oldCasesMap.get(caso.Id).Marco_aprovacao_pendente__c){
+            } else if (caso.Marco_aprovacao_pendente__c && !oldCasesMap.get(caso.Id).Marco_aprovacao_pendente__c) {
                 approvalCasesIds.add(caso.Id);
                 system.debug('Id caso de aprovação posterior: ' + caso.Id);
-            }
-            else if(caso.Status == 'Em andamento' && oldCasesMap.get(caso.Id).Status == 'Em aprovação'){
+            } else if (caso.Status == 'Em andamento' && oldCasesMap.get(caso.Id).Status == 'Em aprovação') {
                 completeMilestoneCases.add(caso.Id);
                 system.debug('completar marco: ' + caso);
             }
-            if(caso.Tem_aprovacao__c && caso.Checar_comentario_de_aprovacao__c == 'Requerido'){
+            if (caso.Tem_aprovacao__c && caso.Checar_comentario_de_aprovacao__c == 'Requerido') {
                 approvalStatements.put(caso.Id, caso);
                 caso.Checar_comentario_de_aprovacao__c = null;
             }
         }
-        
-           
-        if(!newCasesAttList.isEmpty())
+
+
+        if (!newCasesAttList.isEmpty())
             checkCaseAttachment(newCasesAttList);
-        
-        if(!casesTransitionMap.values().isEmpty()){           
+
+        if (!casesTransitionMap.values().isEmpty()) {
             errorCasesMap = CRA_ItemUtil.findDuplicates(casesTransitionMap.values());
             system.debug('errorCasesMap duplicidade: ' + errorCasesMap);
-            if(!errorCasesMap.isEmpty()){
-                for(Case caso: errorCasesMap.values()){
-                    if(casesTransitionMap.get(caso.Id) != null)
+            if (!errorCasesMap.isEmpty()) {
+                for (Case caso: errorCasesMap.values()) {
+                    if (casesTransitionMap.get(caso.Id) != null)
                         casesTransitionMap.get(caso.Id).addError('Essa solicitação não pode ser aberta pois já existe uma em andamento nas mesmas condições.');
                 }
             }
         }
-        
-        if(!casesTransitionMap.values().isEmpty()){
-            Map<Id, Assunto__c> assuntosMap = new Map<Id, Assunto__c>([SELECT Id, SLA__c FROM Assunto__c WHERE ID IN : transitionAssuntosId]);
-            for(Case caso : casesTransitionMap.values()){
+
+        if (!casesTransitionMap.values().isEmpty()) {
+            Map < Id, Assunto__c > assuntosMap = new Map < Id, Assunto__c > ([SELECT Id, SLA__c FROM Assunto__c WHERE ID IN: transitionAssuntosId]);
+            for (Case caso: casesTransitionMap.values()) {
                 caso.EntitlementId = assuntosMap.get(caso.Assunto__c).SLA__c;
             }
         }
-        
+
         //if(!closeCaseIds.isEmpty())
-            //closeCases(closeCaseIds);
-        
-        if(!casesApprovalList.isEmpty())
+        //closeCases(closeCaseIds);
+
+        if (!casesApprovalList.isEmpty())
             casesTransitionApproval(casesApprovalList, transitionAssuntosId);
 
-        if(!approvalCasesIds.isEmpty())
+        if (!approvalCasesIds.isEmpty())
             sendToApproval(approvalCasesIds);
 
-        if(!completeMilestoneCases.isEmpty())
+        if (!completeMilestoneCases.isEmpty())
             MilestoneUtils.completeMilestone(completeMilestoneCases, system.now());
 
-        if(!approvalStatements.isEmpty())
-            checkApprovalComment(approvalStatements);        
-        
+        if (!approvalStatements.isEmpty())
+            checkApprovalComment(approvalStatements);
+
     }
 
-    public static void casesTransitionCharging(Set<Id> transitionCaseIds){
+    public static void casesTransitionCharging(Set < Id > transitionCaseIds) {
 
-        List<Case> filteredTransitionCases = CRA_CobrancaUtil.CreateChargingfromCase(transitionCaseIds);
+        List < Case > filteredTransitionCases = CRA_CobrancaUtil.CreateChargingfromCase(transitionCaseIds);
         system.debug('filteredTransitionCases ' + filteredTransitionCases);
 
-        if(!filteredTransitionCases.isEmpty()){
-            Map<Id, Case> transitionCasesMap = new Map<Id, Case>(filteredTransitionCases);
-            Set<Id> CaseIds = transitionCasesMap.keySet();
-            for(Case caso : transitionCasesMap.values()){
+        if (!filteredTransitionCases.isEmpty()) {
+            Map < Id, Case > transitionCasesMap = new Map < Id, Case > (filteredTransitionCases);
+            Set < Id > CaseIds = transitionCasesMap.keySet();
+            for (Case caso: transitionCasesMap.values()) {
                 caso.Status = 'Em andamento';
             }
             system.debug('Update: casesTransitionCharging');
@@ -113,24 +138,25 @@ public class CRA_CaseUtil {
     }
 
     @Future
-    public static void casesWaitingPayment(Set<Id> casesId){
-        List<Case> casos = [SELECT Id, Status, Valor__c, Aluno__r.Campus_n__r.Horario_Comercial__c, Assunto__r.Pagamento__c, 
-                            Assunto__r.Cobranca_manual__c, Assunto__r.Aprovacao_Imediata__c, Assunto__r.Aprovacao_Coordenador__c, 
-                            Assunto__r.Aprovacao_Diretor__c, Assunto__r.Aprovacao_Supervisor__c, Assunto__r.Aprovacao_manual__c, 
-                            Vencimento_do_boleto__c
-                            FROM Case 
-                            WHERE Id IN: casesId];
+    public static void casesWaitingPayment(Set < Id > casesId) {
+        List < Case > casos = [SELECT Id, Status, Valor__c, Aluno__r.Campus_n__r.Horario_Comercial__c, Assunto__r.Pagamento__c,
+            Assunto__r.Cobranca_manual__c, Assunto__r.Aprovacao_Imediata__c, Assunto__r.Aprovacao_Coordenador__c,
+            Assunto__r.Aprovacao_Diretor__c, Assunto__r.Aprovacao_Supervisor__c, Assunto__r.Aprovacao_manual__c,
+            Vencimento_do_boleto__c
+            FROM Case
+            WHERE Id IN: casesId
+        ];
 
-        for(Case caso : casos){ 
+        for (Case caso: casos) {
             caso.Status = 'Aguardando pagamento';
             caso.Apex_context__c = true;
-        }       
-        if(!casos.isEmpty()){
+        }
+        if (!casos.isEmpty()) {
             system.debug('Update: casesWaitingPayment');
             Database.update(casos, false);
         }
     }
-    
+
     /*
     @Future
     public static void closeCases(Set<Id> closeCaseIds){
@@ -146,326 +172,513 @@ public class CRA_CaseUtil {
     }
     */
 
-    public static void casesTransitionApproval(List<Case> transitionCases, Set<Id> transitionAssuntosId){
-        Set<Id> approvalCasesIds = new Set<Id>();
+    public static void casesTransitionApproval(List < Case > transitionCases, Set < Id > transitionAssuntosId) {
+        Set < Id > approvalCasesIds = new Set < Id > ();
         //Construção dos mapas de assuntos
-        Map<Id, Assunto__c> assuntosMap = new Map<Id, Assunto__c> ([SELECT Id, Pagamento__c, Aprovacao_Imediata__c, 
-                                                                    Aprovacao_Coordenador__c, Aprovacao_Diretor__c, 
-                                                                    Aprovacao_Supervisor__c, Aprovacao_manual__c    
-                                                                    FROM Assunto__c WHERE Id IN: transitionAssuntosId]);
-        for(Case caso: transitionCases){
-            if(caso.Status == 'Em andamento' && !assuntosMap.get(caso.Assunto__c).Aprovacao_manual__c && ( assuntosMap.get(caso.Assunto__c).Aprovacao_Supervisor__c 
-            || assuntosMap.get(caso.Assunto__c).Aprovacao_Diretor__c || assuntosMap.get(caso.Assunto__c).Aprovacao_Coordenador__c) ){
+        Map < Id, Assunto__c > assuntosMap = new Map < Id, Assunto__c > ([SELECT Id, Pagamento__c, Aprovacao_Imediata__c,
+            Aprovacao_Coordenador__c, Aprovacao_Diretor__c,
+            Aprovacao_Supervisor__c, Aprovacao_manual__c
+            FROM Assunto__c WHERE Id IN: transitionAssuntosId
+        ]);
+        for (Case caso: transitionCases) {
+            if (caso.Status == 'Em andamento' && !assuntosMap.get(caso.Assunto__c).Aprovacao_manual__c && (assuntosMap.get(caso.Assunto__c).Aprovacao_Supervisor__c ||
+                    assuntosMap.get(caso.Assunto__c).Aprovacao_Diretor__c || assuntosMap.get(caso.Assunto__c).Aprovacao_Coordenador__c)) {
                 approvalCasesIds.add(caso.Id);
             }
         }
 
-        if(approvalCasesIds.size() > 0)
+        if (approvalCasesIds.size() > 0)
             sendToApproval(approvalCasesIds);
     }
 
-    public static void checkApprovalComment(Map<Id, Case> approvalCasesMap){
-        List<Id> processInstanceIds = new List<Id>();
-        for (Case caso : [SELECT (SELECT ID
-                                  FROM ProcessInstances
-                                  ORDER BY CreatedDate DESC
-                                  LIMIT 1)
-                          FROM Case
-                          WHERE ID IN :approvalCasesMap.keySet()])
-        {
+    public static void checkApprovalComment(Map < Id, Case > approvalCasesMap) {
+        List < Id > processInstanceIds = new List < Id > ();
+        for (Case caso: [SELECT(SELECT ID FROM ProcessInstances ORDER BY CreatedDate DESC LIMIT 1)
+                FROM Case
+                WHERE ID IN: approvalCasesMap.keySet()
+            ]) {
             processInstanceIds.add(caso.ProcessInstances[0].Id);
         }
-           
-        for (ProcessInstance pi : [SELECT TargetObjectId,
-                                       (SELECT Id, StepStatus, Comments 
-                                        FROM Steps
-                                        ORDER BY CreatedDate DESC
-                                        LIMIT 1 )
-                                   FROM ProcessInstance
-                                   WHERE Id IN :processInstanceIds
-                                   ORDER BY CreatedDate DESC])
-        {                 
-            if ((pi.Steps[0].Comments == null || 
-                pi.Steps[0].Comments.trim().length() == 0))
-                {
-                    approvalCasesMap.get(pi.TargetObjectId).addError(
-                     'Por favor, informe um parecer no comentário da aprovação.');
-                }
-        }                      
+
+        for (ProcessInstance pi: [SELECT TargetObjectId,
+                (SELECT Id, StepStatus, Comments FROM Steps ORDER BY CreatedDate DESC LIMIT 1)
+                FROM ProcessInstance
+                WHERE Id IN: processInstanceIds
+                ORDER BY CreatedDate DESC
+            ]) {
+            if ((pi.Steps[0].Comments == null ||
+                    pi.Steps[0].Comments.trim().length() == 0)) {
+                approvalCasesMap.get(pi.TargetObjectId).addError(
+                    'Por favor, informe um parecer no comentário da aprovação.');
+            }
+        }
     }
 
-    @Future(callout=true)
-    public static void sendToApproval(Set<Id> casesId){
-        List<Case> approvalCasesList = [SELECT Id, Assunto__r.Aprovacao_Imediata__c, Assunto__r.Aprovacao_Coordenador__c, 
-                                        Assunto__r.Aprovacao_Diretor__c, Aluno__r.R_A_do_Aluno__c, Aluno__r.Campus_n__r.C_digo_do_Campus__c,
-                                        Aluno__r.Campus_n__r.Institui_o__r.C_digo_da_Coligada__c
-                                        FROM Case WHERE Id IN: casesId];        
-        Set<Id> casesApprovalId = new Set<Id>();
-        Map<Id, Case> casesUpdate = new Map<Id, Case>();
-        List<User> aprovadores = [SELECT Id, DBNumber__c FROM User WHERE DBNumber__c != null AND IsActive = true AND (Profile.Name = 'CRA - Aprovador Acadêmico' OR Profile.Name = 'CRA - Aprovador Diretor')];
-        Map<String, Id> codigoIdAprovadores = new Map<String, Id>();
-        for(User aprovador : aprovadores){
+    @Future(callout = true)
+    public static void sendToApproval(Set < Id > casesId) {
+        List < Case > approvalCasesList = [SELECT Id, Assunto__r.Aprovacao_Imediata__c, Assunto__r.Aprovacao_Coordenador__c,
+            Assunto__r.Aprovacao_Diretor__c, Aluno__r.R_A_do_Aluno__c, Aluno__r.Campus_n__r.C_digo_do_Campus__c,
+            Aluno__r.Campus_n__r.Institui_o__r.C_digo_da_Coligada__c
+            FROM Case WHERE Id IN: casesId
+        ];
+        Set < Id > casesApprovalId = new Set < Id > ();
+        Map < Id, Case > casesUpdate = new Map < Id, Case > ();
+        List < User > aprovadores = [SELECT Id, DBNumber__c FROM User WHERE DBNumber__c != null AND IsActive = true AND(Profile.Name = 'CRA - Aprovador Acadêmico'
+            OR Profile.Name = 'CRA - Aprovador Diretor')];
+        Map < String, Id > codigoIdAprovadores = new Map < String, Id > ();
+        for (User aprovador: aprovadores) {
             codigoIdAprovadores.put(aprovador.DBNumber__c, aprovador.Id);
         }
-        for(Case caso: approvalCasesList){
+        for (Case caso: approvalCasesList) {
             //List<CraDirectorCords.DirectorCord> directorCords = CraDirectorCords.getDirectorCords('1','07100713','1');
-            system.debug('diretor coord'+ caso.Aluno__r.Campus_n__r.Institui_o__r.C_digo_da_Coligada__c+' '+caso.Aluno__r.R_A_do_Aluno__c+' '+caso.Aluno__r.Campus_n__r.C_digo_do_Campus__c);
-            List<CraDirectorCords.DirectorCord> directorCords = CraDirectorCords.getDirectorCords(
+            system.debug('diretor coord' + caso.Aluno__r.Campus_n__r.Institui_o__r.C_digo_da_Coligada__c + ' ' + caso.Aluno__r.R_A_do_Aluno__c + ' ' + caso.Aluno__r.Campus_n__r.C_digo_do_Campus__c);
+            List < CraDirectorCords.DirectorCord > directorCords = CraDirectorCords.getDirectorCords(
                 caso.Aluno__r.Campus_n__r.Institui_o__r.C_digo_da_Coligada__c,
                 caso.Aluno__r.R_A_do_Aluno__c,
                 caso.Aluno__r.Campus_n__r.C_digo_do_Campus__c
             );
             system.debug('diretor coord:' + directorCords);
-            if(directorCords != null){
-                if(caso.Assunto__r.Aprovacao_Diretor__c){           
+            if (directorCords != null) {
+                if (caso.Assunto__r.Aprovacao_Diretor__c) {
                     caso.Diretor__c = codigoIdAprovadores.get(directorCords.get(0).DiretorCodPessoa);
                     casesUpdate.put(caso.Id, caso);
                 }
-                if(caso.Assunto__r.Aprovacao_Coordenador__c){
+                if (caso.Assunto__r.Aprovacao_Coordenador__c) {
                     caso.Coordenador__c = codigoIdAprovadores.get(directorCords.get(0).CoodCodigo);
                     casesUpdate.put(caso.Id, caso);
                 }
                 system.debug('caso ' + caso);
             }
             //tratativa de erros
-            if(caso.Assunto__r.Aprovacao_Imediata__c)
-                casesApprovalId.add(caso.Id);   
+            if (caso.Assunto__r.Aprovacao_Imediata__c)
+                casesApprovalId.add(caso.Id);
         }
 
         system.debug('Update: sendToApproval');
         Database.update(casesUpdate.values());
 
 
-        for(Id caseId : casesApprovalId){
-            try{
+        for (Id caseId: casesApprovalId) {
+            try {
                 Approval.ProcessSubmitRequest req = new Approval.ProcessSubmitRequest();
                 req.setObjectId(caseId);
                 Approval.ProcessResult result = Approval.process(req);
                 system.debug('errors: ' + result.getErrors());
-            }
-            catch(Exception e){
+            } catch (Exception e) {
                 system.debug('exceção: ' + e.getMessage());
             }
         }
     }
 
-    public static void setQueueMilestone(List<Case> newCasesList, Map<Id,Case> oldCasesMap){
-            
-        List<Case> changedCasesList = getChangedCase(newCasesList, oldCasesMap, 'Marco_atribuicao_fila_campus__c');
-    
-        for(Case caso: changedCasesList)
-            caso.OwnerId = ([SELECT Queue.id FROM QueueSObject WHERE Queue.Name = :caso.Marco_atribuicao_fila_campus__c LIMIT 1]).Queue.Id;
+    /**
+     * [sendToApprovalWithCancelamento Envia para aprovação assim que o caso fica com status = 'Em andamento']
+     * @param caseId [Id do caso]
+     */
+    @Future
+    public static void sendToApprovalWithCancelamento(String caseId) {
+        try {
+            Approval.ProcessSubmitRequest req = new Approval.ProcessSubmitRequest();
+            req.setObjectId(caseId);
+            Approval.ProcessResult result = Approval.process(req);
+            system.debug('errors: ' + result.getErrors());
+        } catch (Exception e) {
+            system.debug('exceção: ' + e.getMessage());
+        }
+    }
+
+    public static void setQueueMilestone(List < Case > newCasesList, Map < Id, Case > oldCasesMap) {
+
+        List < Case > changedCasesList = getChangedCase(newCasesList, oldCasesMap, 'Marco_atribuicao_fila_campus__c');
+
+        for (Case caso: changedCasesList)
+            caso.OwnerId = ([SELECT Queue.id FROM QueueSObject WHERE Queue.Name =: caso.Marco_atribuicao_fila_campus__c LIMIT 1]).Queue.Id;
 
     }
 
-    public static void setRecordType(List<Case> newCasesList, Map<Id,Case> oldCasesMap){    
-            
-        List<Case> changedCasesList = getChangedCase(newCasesList, oldCasesMap, 'Assunto__c');
+        public static void trataCancelamentoBeforeUpdate(List < Case > newCasesList, Map < Id, Case > oldCasesMap) {
 
-        Set<Id> assuntosIds = getAssuntosIds(changedCasesList);
-        Map<Id,Assunto__c> assuntos = getAssuntos(assuntosIds);
-        
-        for(Case caso: changedCasesList){
-            
+            for(Case caso : newCasesList){
+        //Ações em caso de Cancelamento de Contrato
+        //Ajuste - Willian Matheus (wbatista@moldsoft.com.br) Inicio - 06/04/2018
+
+        if (caso.Tipo_de_Registro__c == 'Cancelamento de Contrato') {
+            if(ChecklistIntegracao__c.getValues('Cancelamento de Contrato').Integra_Cancelamento__c){
+                if ((caso.Retorna_pro_Faturamento__c == true) && (oldCasesMap.get(caso.Id).Retorna_pro_Faturamento__c == false)) {
+                    Cancelamento__c canc = [select id, Finalizado__c, Solicita_o__c, StageQueue__c, StageQueueRM__c, Per_odo_Letivo__c, Coligada__c, Usu_rio_em_Atendimento__c, Retirado_do_Faturamento_RM__c, Id_Habilita_o__c, RA__c, Cod_Operac_o__c, RecCreatedBy__c, Queue_RM__c from Cancelamento__c where Solicita_o__c =: caso.Id limit 1];
+                    String params = CancelamentoQueuesProccess.retornaEndpointRm(canc);
+                    String queueidRm = QueueBO.getInstance().createQueueWithObjectId(QueueEventNames.RETORNA_FATURAMENTO_RM.name(), params, canc.Id);
+                    canc.Status_do_Atendimento__c = 'Finalizado por encerramento do atendimento';
+                    canc.Finalizado__c = true;
+                    canc.Queue_RM__c = queueidRm;
+                    update canc;
+                }
+
+                if ((caso.Status == 'Finalizado por Decurso de Prazo') && (oldCasesMap.get(caso.Id).Status != 'Finalizado por Decurso de Prazo')) {
+                    Cancelamento__c canc = [select id, Solu_o__c, Status_do_Atendimento__c, Finalizado__c, name, Solicita_o__c, Queue_RM__c from Cancelamento__c where Solicita_o__c =: caso.Id limit 1];
+                    canc.Status_do_Atendimento__c = caso.Status;
+                    canc.Finalizado__c = true;
+                    update canc;
+                }
+
+                if ((caso.Retorna_pro_Faturamento__c == false)) {
+                    if ((caso.Cancela_Contrato__c == true) && (oldCasesMap.get(caso.Id).Cancela_Contrato__c == false)) {
+                        Cancelamento__c canc = [select id, Queue_RetornaFaturamento__c, N_documento_SAP__c, Cliente_SAP__c, CPF__c, Empresa_SAP__c, CreatedDate, Filial_SAP__c, Finalizado__c, StageQueue__c, StageQueueRM__c, Per_odo_Letivo__c, Coligada__c, Usu_rio_em_Atendimento__c, Retirado_do_Faturamento_RM__c, Id_Habilita_o__c, RA__c, Cod_Operac_o__c, RecCreatedBy__c, Queue__c, Queue_RM__c from Cancelamento__c where Solicita_o__c =: caso.Id limit 1];
+                        //String queueidRm = QueueBO.getInstance().createQueueWithObjectId(QueueEventNames.CANCELAMENTO_CONTRATO_RM.name(), 'Cancela o contrato no RM');
+                        //canc.Queue_RM__c = queueidRm;
+                        //String queueidRm = QueueBO.getInstance().createQueueWithObjectId(QueueEventNames.ALUNO_NOVATO.name(), 'Aluno novato?');
+                        //canc.Queue_RM__c = queueidRm;
+                        canc.Faturamento_Aprova__c = true;
+                        String params = CancelamentoQueuesProccess.retornaEndpointSap(canc);
+                        String queueidSap = QueueBO.getInstance().createQueueWithObjectId(QueueEventNames.CANCELAMENTO_CONTRATO_SAP.name(), params, canc.Id);
+                        canc.Queue__c = queueidSap;
+                        update canc;
+                    }
+                }
+
+                if ((caso.Solucao__c != null) && (oldCasesMap.get(caso.Id).Solucao__c == null)) {
+                    Cancelamento__c canc = [select id, Solu_o__c, Usu_rio_Delegado_NAAF__c, Status_do_Atendimento__c, Finalizado__c, name, Solicita_o__c, Queue_RM__c from Cancelamento__c where Solicita_o__c =: caso.Id limit 1];
+                    canc.Solu_o__c = caso.Solucao__c;
+                    update canc;
+                }
+
+                if ((caso.Status_de_aprovacao__c != null) && (oldCasesMap.get(caso.Id).Status_de_aprovacao__c == null)) {
+                    Cancelamento__c canc = [select id, Solu_o__c, Usu_rio_Delegado_NAAF__c, Status_do_Atendimento__c, Finalizado__c, name, Solicita_o__c, Queue_RM__c from Cancelamento__c where Solicita_o__c =: caso.Id limit 1];
+                    if (caso.Status_de_aprovacao__c == 'Deferido') {
+                        canc.Status_do_Atendimento__c = 'Deferimento';
+                    } else if (caso.Status_de_aprovacao__c == 'Indeferido') {
+                        canc.Status_do_Atendimento__c = 'Indeferimento';
+                    }
+
+                    update canc;
+                }
+
+                if ((caso.Status == 'Concluído')) {
+                    Cancelamento__c canc = [select id, Solu_o__c, Usu_rio_Delegado_NAAF__c, Status_do_Atendimento__c, Finalizado__c, name, Solicita_o__c, Queue_RM__c from Cancelamento__c where Solicita_o__c =: caso.Id limit 1];
+                    canc.Finalizado__c = true;
+                    update canc;
+                    Set<id> casesToFinalize = new Set<Id>();
+                    casesToFinalize.add(caso.Id);
+                    MilestoneUtils.finalizeMilestoneNow( casesToFinalize, system.now());
+                }
+
+                if (caso.Contador_de_Marcos__c == 0) {
+                    Cancelamento__c canc = [select id, Solu_o__c, Usu_rio_Delegado_NAAF__c, Status_do_Atendimento__c, Finalizado__c, name, Solicita_o__c, Queue_RM__c from Cancelamento__c where Solicita_o__c =: caso.Id limit 1];
+                    caso.Aprovador_NAAF__c = UserInfo.getUserId();
+                    canc.Usu_rio_Delegado_NAAF__c = UserInfo.getUserId();
+                    update canc;
+                }
+            }
+
+            if (caso.Contador_de_Marcos__c == 0) {
+                caso.Aprovador_NAAF__c = UserInfo.getUserId();
+            }
+
+            if (caso.Status == 'Concluído') {
+                    Set<id> casesToFinalize = new Set<Id>();
+                    casesToFinalize.add(caso.Id);
+                    MilestoneUtils.finalizeMilestoneNow( casesToFinalize, system.now());
+            }
+
+            if ((caso.Contador_de_Marcos__c == 4) && (oldCasesMap.get(caso.Id).Contador_de_Marcos__c == 3)) {
+                caso.OwnerId = caso.Aprovador_NAAF__c;
+            }
+
+            if ((caso.Contador_de_Marcos__c == 6) && (oldCasesMap.get(caso.Id).Contador_de_Marcos__c == 5)) {
+                caso.OwnerId = caso.Aprovador_NAAF__c;
+            }
+
+        }
+        //Ajuste - Willian Matheus (wbatista@moldsoft.com.br) Fim - 06/04/2018
+            }
+
+    }
+
+    public static void setRecordType(List < Case > newCasesList, Map < Id, Case > oldCasesMap) {
+
+
+
+        List < Case > changedCasesList = getChangedCase(newCasesList, oldCasesMap, 'Assunto__c');
+
+        Set < Id > assuntosIds = getAssuntosIds(changedCasesList);
+        Map < Id, Assunto__c > assuntos = getAssuntos(assuntosIds);
+
+        for (Case caso: changedCasesList) {
+
             Assunto__c assunto = assuntos.get(caso.Assunto__c);
 
-            if(String.isBlank(caso.RecordTypeId) || (caso.Tipo_de_Registro__c != assunto.Tipo_de_Registro_do_Caso__c))
+            if (String.isBlank(caso.RecordTypeId) || (caso.Tipo_de_Registro__c != assunto.Tipo_de_Registro_do_Caso__c))
                 caso.RecordTypeId = Schema.SObjectType.Case.getRecordTypeInfosByName().get(assunto.Tipo_de_Registro_do_Caso__c).getRecordTypeId();
 
         }
     }
 
-    public static void setRecordType(List<Case> newCasesList){
-            
-        List<Case> changedCasesList = newCasesList;
+    /**
+     * [createCancelamento Cria um objeto cancelamento relacionado ao Caso ]
+     * @param newCasesList [Novos casos]
+     */
+    public static void createCancelamento(List < Case > newCasesList) {
 
-        Set<Id> assuntosIds = getAssuntosIds(changedCasesList);
-        Map<Id,Assunto__c> assuntos = getAssuntos(assuntosIds);
-        
-        for(Case caso: changedCasesList){
-            
+        List < Case > changedCasesList = newCasesList;
+
+        //só cria o cancelamento se for ter integração
+        if(ChecklistIntegracao__c.getValues('Cancelamento de Contrato').Integra_Cancelamento__c){
+            for (Case caso: changedCasesList) {
+
+                if (caso.Tipo_de_Registro__c == 'Cancelamento de Contrato') {
+                    try {
+                        Cancelamento__c c = new Cancelamento__c();
+                        c.Aluno__c = caso.Aluno__c;
+                        c.Cod_Operac_o__c = caso.C_d_Opera_o__c;
+                        c.Solicita_o__c = caso.Id;
+                        //c.Email_Aluno__c = caso.Aluno__r.E_mail__c;
+                        insert c;
+                    } catch (Exception e) {
+                        system.debug(e.getMessage() + e.getLineNumber() + e.getStackTraceString());
+                    }
+                }
+            }
+        }
+    }
+
+
+    public static void setRecordType(List < Case > newCasesList) {
+
+        List < Case > changedCasesList = newCasesList;
+
+        Set < Id > assuntosIds = getAssuntosIds(changedCasesList);
+        Map < Id, Assunto__c > assuntos = getAssuntos(assuntosIds);
+
+        for (Case caso: changedCasesList) {
+
             Assunto__c assunto = assuntos.get(caso.Assunto__c);
 
-            if(String.isBlank(caso.RecordTypeId) || (caso.Tipo_de_Registro__c != assunto.Tipo_de_Registro_do_Caso__c))
+            if (String.isBlank(caso.RecordTypeId) || (caso.Tipo_de_Registro__c != assunto.Tipo_de_Registro_do_Caso__c))
                 caso.RecordTypeId = Schema.SObjectType.Case.getRecordTypeInfosByName().get(assunto.Tipo_de_Registro_do_Caso__c).getRecordTypeId();
 
         }
     }
 
-    public static void sendEmail(List<Case> newCasesList, Map<Id,Case> oldCasesMap){
-        system.debug('entrou send email:' + newCasesList.get(0).Status + oldCasesMap.values().get(0).Status);
-        Set<Id> caseIdsAbertura = new Set<Id>();
-        Set<Id> caseIdsDocumentoAguardando = new Set<Id>(); 
-        Set<Id> caseIdsDocumentoEncerramento = new Set<Id>();   
-        Set<Id> caseIdsConfirmacao = new Set<Id>(); 
-        Set<Id> caseIdsConclusao = new Set<Id>();
-        Set<Id> caseIdsConclusaoSemSolucao = new Set<Id>();
-        Set<Id> caseIdsPagamentoAguardando = new Set<Id>(); 
-        Set<Id> caseIdsPagamentoConfirmacao = new Set<Id>();
-        Set<Id> caseIdsPagamentoEncerramento = new Set<Id>();
+    /**
+     * [barraCancEmAndamento Não permite iniciar atendimento se o aluno ja estiver com um cancelamento em andamento]
+     * @param newCasesList [casos Novos]
+     * @author  Willian Matheus (wbatista@moldsoft.com.br)
+     */
+    public static void barraCancEmAndamento(List < Case > newCasesList) {
+        for(Case caso : newCasesList){
 
+            if (caso.Tipo_de_Registro__c == 'Cancelamento de Contrato') {
 
+                Map < Id, Case > errorCasesCancMap = new Map < Id, Case > ();
+                List < Case > casosEmAndamento = [select id, CaseNumber, toLabel(C_d_Opera_o__c), Aluno__c, Aluno__r.Name, Status from Case where(Status =: 'Em Andamento'
+                    or Status =: 'Em aprovação') and Aluno__c =: caso.Aluno__c and Tipo_de_Registro__c = 'Cancelamento de Contrato'];
+                if (casosEmAndamento.size() > 0) {
+                    errorCasesCancMap.put(caso.Id, caso);
+                    errorCasesCancMap.get(caso.Id).addError('Não foi possível gerar atendimento, para o aluno: ' + casosEmAndamento[0].Aluno__r.Name + ' , já existe uma solicitação (' + casosEmAndamento[0].CaseNumber + ') de ' + casosEmAndamento[0].C_d_Opera_o__c + ' em andamento.');
+                }
+            }
+        }
+
+    }
+
+    /**
+     * [podeCancelar Define que apenas usuários do NAAF podem iniciar um cancelamento]
+     * @author  Willian Matheus (wbatista@moldsoft.com.br)
+     */
+    public static void podeCancelar(List < Case > newCasesList) {
         for(Case caso: newCasesList){
+
+            if (caso.Tipo_de_Registro__c == 'Cancelamento de Contrato') {
+
+                Map < Id, Case > errorCasesCancMap = new Map < Id, Case > ();
+
+                if (!podeIniciarAtendimento()) {
+                    errorCasesCancMap.put(caso.Id, caso);
+                    errorCasesCancMap.get(caso.Id).addError('Apenas colaboradores do NAAF podem iniciar uma solicitação de Cancelamento de Contrato.');
+                }
+            }
+
+        }
+    }
+
+    public static void sendEmail(List < Case > newCasesList, Map < Id, Case > oldCasesMap) {
+
+        Set < Id > caseIdsAbertura = new Set < Id > ();
+        Set < Id > caseIdsDocumentoAguardando = new Set < Id > ();
+        Set < Id > caseIdsDocumentoEncerramento = new Set < Id > ();
+        Set < Id > caseIdsConfirmacao = new Set < Id > ();
+        Set < Id > caseIdsConclusao = new Set < Id > ();
+        Set < Id > caseIdsConclusaoSemSolucao = new Set < Id > ();
+        Set < Id > caseIdsPagamentoAguardando = new Set < Id > ();
+        Set < Id > caseIdsPagamentoConfirmacao = new Set < Id > ();
+        Set < Id > caseIdsPagamentoEncerramento = new Set < Id > ();
+
+
+        for (Case caso: newCasesList) {
 
             //CRA - Abertura de Caso
             //if(caso.Status == 'Em andamento' && (oldCasesMap.get(caso.Id).Status == 'Novo' || oldCasesMap.get(caso.Id).Status == 'Aguardando aluno') && !String.isBlank(String.valueOf(caso.CRA_Data_Hora_de_Previsao_para_SLA__c)))
-                //caseIdsAbertura.add(caso.Id);
+            //caseIdsAbertura.add(caso.Id);
 
             //CRA - Alerta de documentos
-            if(caso.Sub_Status__c == 'Aguardando documentação' && caso.Sub_Status__c != oldCasesMap.get(caso.Id).Sub_Status__c)
+            if (caso.Sub_Status__c == 'Aguardando documentação' && caso.Sub_Status__c != oldCasesMap.get(caso.Id).Sub_Status__c)
                 caseIdsDocumentoAguardando.add(caso.Id);
 
             //CRA - Encerramento falta de documento
-            if(oldCasesMap.get(caso.Id).Status == 'Aguardando aluno' && oldCasesMap.get(caso.Id).Sub_Status__c == 'Aguardando documentação' && caso.Status == 'Encerrado')
+            if (oldCasesMap.get(caso.Id).Status == 'Aguardando aluno' && oldCasesMap.get(caso.Id).Sub_Status__c == 'Aguardando documentação' && caso.Status == 'Encerrado')
                 caseIdsDocumentoEncerramento.add(caso.Id);
-            
+
             //CRA - Alerta confirmação eletrônica
-            if(caso.Sub_Status__c == 'Aguardando confirmação' && caso.Sub_Status__c != oldCasesMap.get(caso.Id).Sub_Status__c)
+            if (caso.Sub_Status__c == 'Aguardando confirmação' && caso.Sub_Status__c != oldCasesMap.get(caso.Id).Sub_Status__c)
                 caseIdsConfirmacao.add(caso.Id);
 
             //CRA - Conclusão de Caso
-            if(caso.Status == 'Concluído' && caso.Status != oldCasesMap.get(caso.Id).Status && !caso.Restrito__c)
+            if (caso.Status == 'Concluído' && caso.Status != oldCasesMap.get(caso.Id).Status && !caso.Restrito__c)
                 caseIdsConclusao.add(caso.Id);
 
             //CRA - Conclusão de Caso (sem solução)
-            if(caso.Status == 'Concluído' && caso.Status != oldCasesMap.get(caso.Id).Status && caso.Restrito__c)
+            if (caso.Status == 'Concluído' && caso.Status != oldCasesMap.get(caso.Id).Status && caso.Restrito__c)
                 caseIdsConclusaoSemSolucao.add(caso.Id);
 
             //CRA - Alerta aguardando pagamento
-            if(caso.Status == 'Aguardando pagamento' && oldCasesMap.get(caso.Id).Status == 'Em andamento')
+            if (caso.Status == 'Aguardando pagamento' && oldCasesMap.get(caso.Id).Status == 'Em andamento')
                 caseIdsPagamentoAguardando.add(caso.Id);
 
             //CRA - Confirmação de pagamento
             //if(caso.Status == 'Em andamento' && oldCasesMap.get(caso.Id).Status == 'Aguardando pagamento')
-                //caseIdsPagamentoConfirmacao.add(caso.Id);
+            //caseIdsPagamentoConfirmacao.add(caso.Id);
 
             //CRA - Encerramento falta de pagamento
-            if(caso.Status == 'Encerrado' && oldCasesMap.get(caso.Id).Status == 'Aguardando pagamento')
+            if (caso.Status == 'Encerrado' && oldCasesMap.get(caso.Id).Status == 'Aguardando pagamento')
                 caseIdsPagamentoEncerramento.add(caso.Id);
 
         }
 
         //if(!caseIdsAbertura.isEmpty()){
-            //if(CRA_checkRecursiveTrigger.runOnce())
-                //CRA_EmailUtil.sendCaseEmailNow(caseIdsAbertura,'CRA - Abertura de Caso');
+        //if(CRA_checkRecursiveTrigger.runOnce())
+        //CRA_EmailUtil.sendCaseEmailNow(caseIdsAbertura,'CRA - Abertura de Caso');
         //}
 
-        if(!caseIdsDocumentoAguardando.isEmpty())
-            CRA_EmailUtil.sendCaseEmail(caseIdsDocumentoAguardando,'CRA - Alerta de documentos');
+        if (!caseIdsDocumentoAguardando.isEmpty())
+            CRA_EmailUtil.sendCaseEmail(caseIdsDocumentoAguardando, 'CRA - Alerta de documentos');
 
-        if(!caseIdsDocumentoEncerramento.isEmpty())
-            CRA_EmailUtil.sendCaseEmailNow(caseIdsDocumentoEncerramento,'CRA - Encerramento falta de documento');
+        if (!caseIdsDocumentoEncerramento.isEmpty())
+            CRA_EmailUtil.sendCaseEmailNow(caseIdsDocumentoEncerramento, 'CRA - Encerramento falta de documento');
 
-        if(!caseIdsConfirmacao.isEmpty()){
-            if(CRA_checkRecursiveTrigger.runConfirmOnce())
-                CRA_EmailUtil.sendCaseEmail(caseIdsConfirmacao,'CRA - Alerta confirmação eletrônica');
-        }           
-
-        if(!caseIdsConclusao.isEmpty()){
-            if(CRA_checkRecursiveTrigger.runCloseOnce())
-                CRA_EmailUtil.sendCaseEmailNow(caseIdsConclusao,'CRA - Conclusão de Caso');
+        if (!caseIdsConfirmacao.isEmpty()) {
+            if (CRA_checkRecursiveTrigger.runConfirmOnce())
+                CRA_EmailUtil.sendCaseEmail(caseIdsConfirmacao, 'CRA - Alerta confirmação eletrônica');
         }
 
-        if(!caseIdsConclusaoSemSolucao.isEmpty())
-            CRA_EmailUtil.sendCaseEmailNow(caseIdsConclusaoSemSolucao,'CRA - Conclusão de Caso (sem solução)');
+        if (!caseIdsConclusao.isEmpty()) {
+            if (CRA_checkRecursiveTrigger.runCloseOnce())
+                CRA_EmailUtil.sendCaseEmailNow(caseIdsConclusao, 'CRA - Conclusão de Caso');
+        }
 
-        if(!caseIdsPagamentoAguardando.isEmpty())
-            CRA_EmailUtil.sendCaseEmailNow(caseIdsPagamentoAguardando,'CRA - Alerta aguardando pagamento');
+        if (!caseIdsConclusaoSemSolucao.isEmpty())
+            CRA_EmailUtil.sendCaseEmailNow(caseIdsConclusaoSemSolucao, 'CRA - Conclusão de Caso (sem solução)');
+
+        if (!caseIdsPagamentoAguardando.isEmpty())
+            CRA_EmailUtil.sendCaseEmailNow(caseIdsPagamentoAguardando, 'CRA - Alerta aguardando pagamento');
 
         //if(!caseIdsPagamentoConfirmacao.isEmpty())
-            //CRA_EmailUtil.sendCaseEmailNow(caseIdsPagamentoConfirmacao,'CRA - Confirmação de pagamento');
+        //CRA_EmailUtil.sendCaseEmailNow(caseIdsPagamentoConfirmacao,'CRA - Confirmação de pagamento');
 
-        if(!caseIdsPagamentoEncerramento.isEmpty())
-            CRA_EmailUtil.sendCaseEmailNow(caseIdsPagamentoEncerramento,'CRA - Encerramento falta de pagamento');
+        if (!caseIdsPagamentoEncerramento.isEmpty())
+            CRA_EmailUtil.sendCaseEmailNow(caseIdsPagamentoEncerramento, 'CRA - Encerramento falta de pagamento');
 
     }
 
-    private static List<Case> getChangedCase(List<Case> newCasesList, Map<Id,Case> oldCasesMap, String field){
-            
-        List<Case> changedCasesList = new List<Case>();
-        
-        for(Case caso: newCasesList){
+    private static List < Case > getChangedCase(List < Case > newCasesList, Map < Id, Case > oldCasesMap, String field) {
 
-            if(field == 'Assunto__c' && caso.Assunto__c != oldCasesMap.get(caso.Id).Assunto__c)
+        List < Case > changedCasesList = new List < Case > ();
+
+        for (Case caso: newCasesList) {
+
+            if (field == 'Assunto__c' && caso.Assunto__c != oldCasesMap.get(caso.Id).Assunto__c)
                 changedCasesList.add(caso);
 
-            if(field == 'Marco_atribuicao_fila_campus__c' && caso.Marco_atribuicao_fila_campus__c != oldCasesMap.get(caso.Id).Marco_atribuicao_fila_campus__c)
+            if (field == 'Marco_atribuicao_fila_campus__c' && caso.Marco_atribuicao_fila_campus__c != oldCasesMap.get(caso.Id).Marco_atribuicao_fila_campus__c)
                 changedCasesList.add(caso);
-                
+
         }
 
         return changedCasesList;
     }
 
-    private static Set<Id> getAssuntosIds(List<Case> casesNew){
-        
-        Set<Id> assuntosIds = new Set<Id>();
-        
-        for (Case caso : casesNew)
+    private static Set < Id > getAssuntosIds(List < Case > casesNew) {
+
+        Set < Id > assuntosIds = new Set < Id > ();
+
+        for (Case caso: casesNew)
             assuntosIds.add(caso.Assunto__c);
-        
+
         return assuntosIds;
     }
 
-    private static Map<Id,Assunto__c> getAssuntos(Set<Id> assuntosIds){
+    private static Map < Id, Assunto__c > getAssuntos(Set < Id > assuntosIds) {
 
         //Map dos Assuntos
-        Map<Id,Assunto__c> assuntos = new Map<Id,Assunto__c>();      
-        for(Assunto__c a : [SELECT id, name, Tipo_de_Registro_do_Caso__c FROM Assunto__c WHERE id IN: assuntosIds])
+        Map < Id, Assunto__c > assuntos = new Map < Id, Assunto__c > ();
+        for (Assunto__c a: [SELECT id, name, Tipo_de_Registro_do_Caso__c FROM Assunto__c WHERE id IN: assuntosIds])
             assuntos.put(a.id, a);
 
         return assuntos;
     }
 
-    public static void assignmentRuleInlineEdit(Map<Id,Case> newCasesMap, Map<Id,Case> oldCasesMap){
-            
+    public static void assignmentRuleInlineEdit(Map < Id, Case > newCasesMap, Map < Id, Case > oldCasesMap) {
+
         //Fetching the assignment rules on case
-        AssignmentRule  AR = new AssignmentRule();
-        AR = [select id from AssignmentRule where SobjectType = 'Case' and Active = true limit 1];
+        AssignmentRule AR = new AssignmentRule();
+        AR = [select id from AssignmentRule where SobjectType = 'Case'
+            and Active = true limit 1
+        ];
 
         //Creating the DMLOptions for "Assign using active assignment rules" checkbox
         Database.DMLOptions dmlOpts = new Database.DMLOptions();
-        dmlOpts.assignmentRuleHeader.assignmentRuleId= AR.id;
+        dmlOpts.assignmentRuleHeader.assignmentRuleId = AR.id;
 
 
-        Map<Id,Case> casesMap = new Map<Id,Case>([Select id, CaseNumber from case where Id IN :newCasesMap.keySet()]);
+        Map < Id, Case > casesMap = new Map < Id, Case > ([Select id, CaseNumber from
+            case where Id IN:
+                newCasesMap.keySet()
+        ]);
 
-        List<Case> casesUpdate = new List<Case>();
-        
-        for(Case caso : newCasesMap.values()){
+        List < Case > casesUpdate = new List < Case > ();
 
-            if(
-                (caso.Status == 'Em andamento' && (oldCasesMap.get(caso.Id).Status == 'Novo' || oldCasesMap.get(caso.Id).Status == 'Aguardando aluno') ) ||
+        for (Case caso: newCasesMap.values()) {
+
+            if (
+                (caso.Status == 'Em andamento' && (oldCasesMap.get(caso.Id).Status == 'Novo' || oldCasesMap.get(caso.Id).Status == 'Aguardando aluno')) ||
                 (caso.Status == 'Aguardando aluno' && oldCasesMap.get(caso.Id).Status == 'Novo')
-              ){
+            ) {
                 Case caseUpdate = casesMap.get(caso.Id);
                 caseUpdate.setOptions(dmlOpts);
                 casesUpdate.add(caseUpdate);
             }
 
         }
-        
-        if(!casesUpdate.isEmpty()){
+
+        if (!casesUpdate.isEmpty()) {
             system.debug('Update: assignmentRuleInlineEdit');
             update casesUpdate;
         }
 
     }
 
-    public static void processCasesAfter(Map<Id, Case> newCasesMap, Map<Id, Case> oldCasesMap){
-        Set<Id> casesConclusionId = new Set<Id>();
-        Set<Id> transitionAssuntosId = new Set<Id>();
-        Set<Id> casesChargingIds = new Set<Id>();
-        Set<Id> completeMilestoneCases = new Set<Id>();
-        for(Case caso : newCasesMap.values()){
-            if(caso.Status == 'Em andamento' && (oldCasesMap.get(caso.Id).Status == 'Novo' || oldCasesMap.get(caso.Id).Status == 'Aguardando aluno')){
-                if(String.isBlank(String.valueOf(caso.CRA_Data_Hora_de_Previsao_para_SLA__c)))
+    public static void processCasesAfter(Map < Id, Case > newCasesMap, Map < Id, Case > oldCasesMap) {
+        Set < Id > casesConclusionId = new Set < Id > ();
+        Set < Id > transitionAssuntosId = new Set < Id > ();
+        Set < Id > casesChargingIds = new Set < Id > ();
+        Set < Id > completeMilestoneCases = new Set < Id > ();
+        for (Case caso: newCasesMap.values()) {
+            if (caso.Status == 'Em andamento' && (oldCasesMap.get(caso.Id).Status == 'Novo' || oldCasesMap.get(caso.Id).Status == 'Aguardando aluno')) {
+                if (String.isBlank(String.valueOf(caso.CRA_Data_Hora_de_Previsao_para_SLA__c)))
                     casesConclusionId.add(caso.Id);
-                if(String.isBlank(String.valueOf(caso.Vencimento_do_boleto__c)) && !caso.Cobranca_manual__c && caso.Pagamento_depois_aprovacao__c)
+                if (String.isBlank(String.valueOf(caso.Vencimento_do_boleto__c)) && !caso.Cobranca_manual__c && caso.Pagamento_depois_aprovacao__c)
                     casesChargingIds.add(caso.Id);
                 transitionAssuntosId.add(caso.Assunto__c);
             }
-            if(caso.Status == 'Em andamento' && oldCasesMap.get(caso.Id).Status == 'Aguardando pagamento'){
+            if (caso.Status == 'Em andamento' && oldCasesMap.get(caso.Id).Status == 'Aguardando pagamento') {
                 completeMilestoneCases.add(caso.Id);
                 /*
                 if(String.isBlank(caso.Status_de_Aprovacao__c) && caso.Pagamento_depois_aprovacao__c && caso.Tem_aprovacao__c){
@@ -477,64 +690,125 @@ public class CRA_CaseUtil {
                     //closeCaseIds.add(caso.Id);
                 */
             }
+
+            //Completa marco após alguem da fila aprovar o Caso
+            //Ajuste - Willian Matheus (wbatista@moldsoft.com.br) Inicio - 06/04/2018
+            if (caso.Tipo_de_Registro__c == 'Cancelamento de Contrato') {
+                if ((caso.Contador_de_Marcos__c == 2) && (oldCasesMap.get(caso.Id).Contador_de_Marcos__c == 1)) {
+                    completeMilestoneCases.add(caso.Id);
+                }
+                if ((caso.Contador_de_Marcos__c == 3) && (oldCasesMap.get(caso.Id).Contador_de_Marcos__c == 2)) {
+                    completeMilestoneCases.add(caso.Id);
+                }
+                if ((caso.Contador_de_Marcos__c == 4) && (oldCasesMap.get(caso.Id).Contador_de_Marcos__c == 3)) {
+                    completeMilestoneCases.add(caso.Id);
+                }
+                if ((caso.Contador_de_Marcos__c == 5) && (oldCasesMap.get(caso.Id).Contador_de_Marcos__c == 4)) {
+                    completeMilestoneCases.add(caso.Id);
+                }
+                if ((caso.Contador_de_Marcos__c == 6) && (oldCasesMap.get(caso.Id).Contador_de_Marcos__c == 5)) {
+                    completeMilestoneCases.add(caso.Id);
+                }
+
+            }
+            //Ajuste - Willian Matheus Fim - 06/04/2018
+
         }
-        
-        if(!casesConclusionId.isEmpty() && CRA_checkRecursiveTrigger.runOnce()){
+
+        if (!casesConclusionId.isEmpty() && CRA_checkRecursiveTrigger.runOnce()) {
             setConclusionDate(casesConclusionId);
         }
-        
-        if(!completeMilestoneCases.isEmpty())
+
+        if (!completeMilestoneCases.isEmpty())
             MilestoneUtils.completeMilestoneNow(completeMilestoneCases, system.now());
 
-        if(!casesChargingIds.isEmpty())
+        if (!casesChargingIds.isEmpty())
             casesTransitionCharging(casesChargingIds);
-        
+
     }
 
     @Future
-    public static void setConclusionDate(Set<Id> casesId){
-        Map<Id, Case> casesSetConclusionDate = new Map<Id, Case>();
+    public static void setConclusionDate(Set < Id > casesId) {
+        Map < Id, Case > casesSetConclusionDate = new Map < Id, Case > ();
         casesSetConclusionDate.putAll([SELECT Id, CRA_Data_Hora_de_Previsao_para_SLA__c FROM Case WHERE Id IN: casesId AND CRA_Data_Hora_de_Previsao_para_SLA__c = null]);
-        Map<Id, Case> casesToUpdate = new Map<Id, Case>();
-        Map<Id,CaseMilestone> milestones = getCaseMilestone(casesId);
-        system.debug('milestones: ' + milestones); 
-        for(Case caso: casesSetConclusionDate.values())
-            if(String.isBlank(String.valueOf(caso.CRA_Data_Hora_de_Previsao_para_SLA__c)) && (milestones.get(caso.Id)!= null)){
+        Map < Id, Case > casesToUpdate = new Map < Id, Case > ();
+        Map < Id, CaseMilestone > milestones = getCaseMilestone(casesId);
+        system.debug('milestones: ' + milestones);
+        for (Case caso: casesSetConclusionDate.values())
+            if (String.isBlank(String.valueOf(caso.CRA_Data_Hora_de_Previsao_para_SLA__c)) && (milestones.get(caso.Id) != null)) {
                 caso.CRA_Data_Hora_de_Previsao_para_SLA__c = milestones.get(caso.Id).TargetDate;
                 casesToUpdate.put(caso.Id, caso);
             }
         system.debug('Update: setConclusionDate');
-        if(!casesToUpdate.isEmpty()){
+        if (!casesToUpdate.isEmpty()) {
             Database.update(casesToUpdate.values());
-            CRA_EmailUtil.sendCaseEmailNow(casesToUpdate.keySet(),'CRA - Abertura de Caso');
-        }        
+            CRA_EmailUtil.sendCaseEmailNow(casesToUpdate.keySet(), 'CRA - Abertura de Caso');
+        }
     }
 
-    public static Map<Id,CaseMilestone> getCaseMilestone(Set<Id> caseIds){
+    public static Map < Id, CaseMilestone > getCaseMilestone(Set < Id > caseIds) {
 
-        MilestoneType milestoneType = [SELECT Id FROM MilestoneType WHERE Name = 'Conclusão do Caso' LIMIT 1];
-        List<CaseMilestone> caseMilestones = [SELECT CaseId, TargetDate FROM CaseMilestone WHERE CaseId IN :caseIds AND MilestoneTypeId = :milestoneType.Id];
+        MilestoneType milestoneType = [SELECT Id FROM MilestoneType WHERE Name = 'Conclusão do Caso'
+            LIMIT 1
+        ];
+        List < CaseMilestone > caseMilestones = [SELECT CaseId, TargetDate FROM CaseMilestone WHERE CaseId IN: caseIds AND MilestoneTypeId =: milestoneType.Id];
 
-        Map<Id,CaseMilestone> milestones = new Map<Id,CaseMilestone>();
-        for(CaseMilestone m : caseMilestones)
+        Map < Id, CaseMilestone > milestones = new Map < Id, CaseMilestone > ();
+        for (CaseMilestone m: caseMilestones)
             milestones.put(m.CaseId, m);
 
         return milestones;
     }
 
-    Public Static void checkCaseAttachment(List<Case> myCases){
-        Set<Id> caseId = new Set<Id>();
-        Map<Id,Case> caseMap = new Map<Id,Case>();
+    Public Static void checkCaseAttachment(List < Case > myCases) {
+        Set < Id > caseId = new Set < Id > ();
+        Map < Id, Case > caseMap = new Map < Id, Case > ();
         caseMap.putAll(myCases);
         caseId = caseMap.keySet();
-        List<Case> allCases = New List<Case>();
-        allCases = [SELECT Id, Status, Assunto__r.Anexo__c, (SELECT Id, Name FROM Attachments) FROM Case WHERE Id = :CaseId AND Assunto__r.Anexo__c = 'Obrigatório'];
-        for(Case c: allCases){
-            if(c.Attachments.size() == 0 ){
+        List < Case > allCases = New List < Case > ();
+        allCases = [SELECT Id, Status, Assunto__r.Anexo__c, (SELECT Id, Name FROM Attachments) FROM Case WHERE Id =: CaseId AND Assunto__r.Anexo__c = 'Obrigatório'];
+        for (Case c: allCases) {
+            if (c.Attachments.size() == 0) {
                 caseMap.get(c.Id).addError('Obrigatório adicionar anexo antes de dar continuidade à solicitação.');
             }
         }
     }
 
+    /**
+     * [checkCaseCancAttachment description]
+     * @param  caseId [description]
+     * @return        [Mensagem]
+     * @author  Willian Matheus (wbatista@moldsoft.com.br)
+     */
+    public static String checkCaseCancAttachment(String caseId) {
+
+        List < Case > allCases = New List < Case > ();
+        allCases = [SELECT Id, Status, Assunto__r.Anexo__c, Solucao__c, (SELECT Id, Name FROM Attachments) FROM Case WHERE Id =: CaseId];
+        for (Case c: allCases) {
+            system.debug('aqui  2' + c.Attachments.size());
+            system.debug('aqui  3' + c.Solucao__c);
+            if (c.Attachments.size() == 0) {
+                return 'Para Deferir ou Indeferir, é necessário Anexar um arquivo ao atendimento.';
+            } else if (c.Solucao__c == null) {
+                return 'Para Deferir ou Indeferir, é necessário preencher o campo Solução.';
+            }
+        }
+        return null;
+    }
+
+    /**
+     * [podeIniciarAtendimento Define que apenas usuários do NAAF podem iniciar um cancelamento]
+     * @return [Se pode ou nã iniciar atendimento]
+     * @author  Willian Matheus (wbatista@moldsoft.com.br)
+     */
+    public static Boolean podeIniciarAtendimento() {
+        Id id1 = UserInfo.getProfileId();
+        String profileName = [Select Name from Profile where Id =: id1 limit 1].name;
+        if ((profileName == 'Administrador do Sistema') ||(profileName == 'Administrador / Dev / TI') || (profileName == 'CRA - Contact Center') || (profileName == 'CRA - Back Office') || (profileName == 'CRA - Front Office') || (profileName == 'CRA - Home Office') || (profileName == 'CRA - Terceiro Nível') || (profileName == 'CRA - Supervisor Atendimento')) {
+            return true;
+        } else {
+            return false;
+        }
+    }
 
 }
