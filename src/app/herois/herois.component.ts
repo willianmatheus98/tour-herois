@@ -21,6 +21,7 @@ export class HeroisComponent implements OnInit {
     this.heroiService.getHerois()
       .subscribe(herois => this.herois = herois);
   }
+
   heroiSelecionado: Heroi;
   onSelect(heroi: Heroi): void {
     this.heroiSelecionado = heroi;
@@ -30,4 +31,18 @@ export class HeroisComponent implements OnInit {
     this.getHerois();
   }
 
+  adicionar(nome: string): void {
+    nome = nome.trim();
+    if (!nome) { return; }
+    this.heroiService.adicionaHeroi({ nome } as Heroi)
+      .subscribe(heroi => {
+        this.herois.push(heroi);
+      });
+  }
+
+  remover(heroi: Heroi): void {
+    this.herois = this.herois.filter(h => h !== heroi);
+    this.heroiService.removerHeroi(heroi).subscribe();
+    }
+    
 }

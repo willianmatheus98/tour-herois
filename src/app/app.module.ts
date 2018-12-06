@@ -10,18 +10,32 @@ import { HeroiDetalheComponent } from './heroi-detalhe/heroi-detalhe.component';
 import { MensagensComponent } from './mensagens/mensagens.component';
 import { PainelComponent } from './painel/painel.component';
 
+import { HttpClientInMemoryWebApiModule } from 'angular-in-memory-web-api';
+import { HttpClientModule } from '@angular/common/http';
+import { InMemoryDataService } from './in-memory-data.service';
+import { HeroiBuscaComponent } from './heroi-busca/heroi-busca.component';
+
 @NgModule({
   declarations: [
     AppComponent,
     HeroisComponent,
     HeroiDetalheComponent,
     MensagensComponent,
-    PainelComponent
+    PainelComponent,
+    HeroiBuscaComponent
   ],
   imports: [
     BrowserModule,
     AppRoutingModule,
-    FormsModule
+    FormsModule,
+    HttpClientInMemoryWebApiModule,
+    HttpClientModule,
+    // O módulo HttpClientInMemoryWebApiModule intercepta requisições HTTP
+    // e retorna respostas de servidor simuladas.
+    // Remova-o quando um servidor real estiver pronto para receber requisições.
+    HttpClientInMemoryWebApiModule.forRoot(
+    InMemoryDataService, { dataEncapsulation: false }
+    )
   ],
   providers: [],
   bootstrap: [AppComponent]
